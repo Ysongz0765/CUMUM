@@ -1,0 +1,20 @@
+{
+  "baseline_cost_yuan": 48052.04659084667,
+  "optimized_cost_yuan": 35126.94859028963,
+  "saving_yuan": 12925.098000557045,
+  "saving_rate": 0.268981217607891,
+  "total_load_kwh": 111024.8081,
+  "total_pv_kwh": 55482.835666666666,
+  "total_grid_purchase_kwh": 59482.69899598835,
+  "total_charge_kwh": 20740.666119236903,
+  "total_discharge_kwh": 16799.93955658189,
+  "total_curtailment_kwh": 0.0,
+  "initial_soc_kwh": 6000,
+  "terminal_soc_kwh": 6000.0,
+  "min_soc_kwh": 1200.0,
+  "max_soc_kwh": 10800.0,
+  "max_balance_error": 1.1368683772161603e-13,
+  "max_soc_equation_error": 9.094947017729282e-13,
+  "simultaneous_charge_discharge_count": 0,
+  "cost_recalculated_yuan": 35126.94859028963
+}

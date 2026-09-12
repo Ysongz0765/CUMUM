@@ -1,0 +1,17 @@
+{
+  "signature": "2b952714f5932c62482426a7400d3f1d5513270f0d46afb37b610cce8825d6a2",
+  "runtime_seconds": 860.1073327064514,
+  "python": "C:\\Users\\dell\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+  "root": "C:\\Users\\dell\\Desktop\\C题02\\cumcm2026_c_microgrid",
+  "forecast_choice": {
+    "load_method": "ridge",
+    "pv_method": "ridge"
+  },
+  "recommended_lambda": 0.0,
+  "chosen_lambda": 0.05,
+  "main_policy": "B4",
+  "recommended_policy": "B3",
+  "risk_preference_policy": "B4",
+  "common_feb1_soc_kwh": 4910.116222222223,
+  "rows": 144288
+}

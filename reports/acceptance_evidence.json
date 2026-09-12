@@ -1,0 +1,97 @@
+{
+  "q1_rows": 144,
+  "q2_rows": 144288,
+  "q2_plan_rows": 144288,
+  "q2_policies": [
+    "B1",
+    "B3",
+    "B4"
+  ],
+  "q2_price_source": "attachment1",
+  "keys_unique": true,
+  "finite_values": true,
+  "complete_policy_dates": true,
+  "actual_matches_attachment2": true,
+  "max_independent_balance_error": 1.0,
+  "independent_balance_within_1e-6": false,
+  "max_plan_fee_error_yuan": 10.0,
+  "max_emergency_fee_error_yuan": 9.094947017729282e-13,
+  "independent_fees_within_0_01": false,
+  "q1_slot_sequence": true,
+  "q2_slot_sequence": true,
+  "g_fixed_after_0000": true,
+  "max_execution_balance_error": 2.091837814077735e-11,
+  "max_execution_soc_error": 0.8999999999996362,
+  "nonnegative": true,
+  "soc_bounds": true,
+  "annual_cost_reconciliation": true,
+  "warmup_rows": 4464,
+  "common_feb1_soc_kwh": 4910.116222222223,
+  "cross_day_soc_continuity": true,
+  "scenario_sources_strictly_historical": true,
+  "scenario_weights_normalized": true,
+  "attachment1_tariff_used": true,
+  "b3_differs_from_b1": true,
+  "b4_differs_from_b3": true,
+  "max_charge_kwh": 834.3333333333333,
+  "max_discharge_kwh": 833.3333333333334,
+  "simultaneous_charge_discharge_count": 0,
+  "result1.xlsx": {
+    "sheets": [
+      "计划购电量",
+      "充放电量"
+    ],
+    "shapes": {
+      "计划购电量": [
+        145,
+        2
+      ],
+      "充放电量": [
+        7,
+        5
+      ]
+    }
+  },
+  "result2.xlsx": {
+    "sheets": [
+      "计划购电量",
+      "充放电量",
+      "紧急购电量"
+    ],
+    "shapes": {
+      "计划购电量": [
+        335,
+        147
+      ],
+      "充放电量": [
+        2005,
+        6
+      ],
+      "紧急购电量": [
+        3670,
+        3
+      ]
+    }
+  },
+  "result1_no_F_write": true,
+  "result1_headers_labels_preserved": true,
+  "result1_charge_sum_matches": true,
+  "result1_discharge_sum_matches": true,
+  "result2_plan_total_matches": true,
+  "result2_plan_cost_matches": true,
+  "result2_charge_sum_matches": true,
+  "result2_discharge_sum_matches": true,
+  "result2_emergency_sum_matches": true,
+  "result2_plan_headers_preserved": true,
+  "result2_every_plan_cell_matches": true,
+  "result2_every_4hour_block_matches": true,
+  "result2_every_daily_soc_matches": true,
+  "balance_error_within_1e-6": true,
+  "soc_error_within_1e-6": false,
+  "charge_limit_kwh": 833.3333333333336,
+  "discharge_limit_kwh": 833.3333333333336,
+  "charge_limit_within_1e-6": false,
+  "discharge_limit_within_1e-6": true,
+  "annual_cost_reconciliation_strict": false,
+  "result2_plan_cost_matches_strict": true
+}

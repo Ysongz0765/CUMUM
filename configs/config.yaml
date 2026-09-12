@@ -1,0 +1,58 @@
+time:
+  delta_minutes: 10
+  delta_hours: 0.1666666666666667
+  slots_per_day: 144
+battery:
+  capacity_kwh: 12000
+  soc_min_kwh: 1200
+  soc_max_kwh: 10800
+  initial_soc_kwh: 6000
+  max_charge_power_kw: 5000
+  max_discharge_power_kw: 5000
+  charge_efficiency: 0.9
+  discharge_efficiency: 0.9
+cost:
+  emergency_multiplier: 5.0
+  increase_purchase_multiplier: 1.5
+  decrease_penalty_ratio: 0.5
+simulation:
+  full_start: 2025-01-01
+  full_end: 2025-12-31
+  warmup_start: 2025-01-01
+  warmup_end: 2025-01-31
+  main_start: 2025-02-01
+  main_end: 2025-12-31
+random_seed: 2026
+q2:
+  price_source: attachment1
+  scenario_count: 20
+  cvar_alpha: 0.95
+  cvar_lambda: 0.05
+  prediction_validation_start: 2025-01-15
+  prediction_validation_end: 2025-01-31
+  main_policy: B4
+  recommended_policy: B3
+  risk_preference_policy: B4
+q3:
+  issue_hours: [0, 6, 12, 18]
+  scenario_count: 10
+  scenario_lookback_days: 60
+  cvar_alpha: 0.95
+  cvar_lambda: 0.05
+  delta_candidates_yuan: [0, 50, 200, 500]
+  calibration_start: 2025-01-22
+  calibration_end: 2025-01-31
+  main_policy: C3
+  settlement: final_vs_original
+q4:
+  price_source: attachment4
+  price_information_assumption: day_ahead_prices_known_at_0000
+  scenario_count_q4_2: 20
+  scenario_count_q4_3: 10
+  cvar_alpha: 0.95
+  b4_lambda: 0.05
+  delta_candidates_yuan: [0, 50, 200, 500]
+  calibration_start: 2025-01-22
+  calibration_end: 2025-01-31
+  main_policy_q4_2: B4
+  main_policy_q4_3: C3

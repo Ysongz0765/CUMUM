@@ -1,0 +1,8 @@
+{
+  "warmup_signature": "3847d28edde46b5974c3f762a0b57623ac9db779d8ef643b604f59b112c1aea1",
+  "rows": 4464,
+  "initial_soc_kwh": 6000.0,
+  "feb1_initial_soc_kwh": 3911.098134470335,
+  "cost_excluded_from_formal_evaluation": true,
+  "assumption": "Jan 1 uses the observed trajectory only for offline initialization; Jan 2-31 use yesterday-same-slot forecasts and causal execution."
+}

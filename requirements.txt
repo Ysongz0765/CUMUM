@@ -1,0 +1,10 @@
+pandas
+numpy
+openpyxl
+pyarrow
+matplotlib
+scipy
+statsmodels
+scikit-learn
+pyyaml
+pytest

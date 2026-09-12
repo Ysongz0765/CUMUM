@@ -1,0 +1,10 @@
+{
+  "signature": "d5976e67ac3346b953e0a73c832ff93b2c668ecc329bb8236d4d8d5857a72993",
+  "runtime_seconds": 3129.2169432640076,
+  "python": "C:\\Users\\dell\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
+  "common_feb1_soc_kwh": 4910.116222222223,
+  "selected_delta_yuan": 500.0,
+  "main_policy": "C3",
+  "scenario_count": 10,
+  "rows": 192384
+}

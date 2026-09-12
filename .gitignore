@@ -1,0 +1,10 @@
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+data/interim/
+outputs/**/cache/
+outputs/**/*.log
+outputs/q2_baseline_before_q3_20260912/
+outputs/q2_legacy_diagnostic_20260912/
+*.log

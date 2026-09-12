@@ -1,0 +1,16 @@
+{
+  "prediction_signature": "7792a4edf320ba39c23f1025c2d1e53217c8a0766f1aef3e922cecc1b07f09ef",
+  "price_independent": true,
+  "forecast_choice": {
+    "load_method": "ridge",
+    "pv_method": "ridge"
+  },
+  "rows": 51552,
+  "dependencies": [
+    "src\\microgrid\\prediction.py",
+    "src\\microgrid\\features.py",
+    "src\\microgrid\\io.py",
+    "configs\\config.yaml",
+    "data\\raw\\附件2.xlsx"
+  ]
+}

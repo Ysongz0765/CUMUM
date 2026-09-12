@@ -1,0 +1,16 @@
+{
+  "signature": "eb31b5d7babd512eb308d673cd26d6f9464d8f3df64bb0a16e17516510403451",
+  "runtime_seconds": 4291.146313905716,
+  "price_source": "attachment4",
+  "price_information_assumption": "day_ahead_prices_known_at_0000",
+  "prediction_signature": "7792a4edf320ba39c23f1025c2d1e53217c8a0766f1aef3e922cecc1b07f09ef",
+  "warmup_signature": "3847d28edde46b5974c3f762a0b57623ac9db779d8ef643b604f59b112c1aea1",
+  "common_feb1_soc_kwh": 3911.098134470335,
+  "scenario_count": 10,
+  "cvar_alpha": 0.95,
+  "cvar_lambda": 0.05,
+  "selected_delta_yuan": 500.0,
+  "main_policy": "C3",
+  "rows": 192384,
+  "checkpoint_directory": "outputs\\q4\\cache\\q4_3\\eb31b5d7babd512e"
+}
