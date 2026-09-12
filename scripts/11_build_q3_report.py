@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 
 ROOT=Path(__file__).parents[1];out=ROOT/'outputs/q3';reports=ROOT/'reports';figs=reports/'figures/q3';figs.mkdir(parents=True,exist_ok=True)
 x=pd.read_csv(out/'q3_execution_detail.csv',parse_dates=['date']);daily=pd.read_csv(out/'q3_daily_summary.csv',parse_dates=['date']);comp=pd.read_csv(out/'q3_strategy_comparison.csv');rv=pd.read_csv(out/'q3_revision_log.csv',parse_dates=['date']);snap=pd.read_csv(out/'q3_plan_snapshots.csv',parse_dates=['date']);cal=pd.read_csv(out/'q3_delta_selection.csv');acc=pd.read_csv(out/'q3_forecast_update_accuracy.csv',parse_dates=['date']);manifest=json.loads((out/'run_manifest.json').read_text(encoding='utf-8'));main=manifest['main_policy'];m=x[x.policy==main]
+boundary=pd.read_csv(ROOT/'outputs/diagnostics/forecast_boundary_accuracy_summary.csv')
+boundary_formal=boundary[(boundary.period=='formal_2025-02-01_2025-12-31')&(boundary.region=='all_available_targets')]
+ablation=pd.read_csv(out/'q3_18h_ablation_comparison.csv')
 monthly=daily.assign(month=daily.date.dt.month).groupby(['policy','month']).agg(total_cost_yuan=('total_cost_yuan','sum'),emergency_cost_yuan=('emergency_cost_yuan','sum'),emergency_purchase_kwh=('emergency_purchase_kwh','sum'),remaining_energy_kwh=('remaining_energy_kwh','sum')).reset_index();monthly.to_csv(out/'q3_monthly_summary.csv',index=False)
 revision_summary=rv.groupby(['policy','issue_hour']).agg(
     decisions=('triggered','size'),
@@ -88,7 +91,7 @@ report=f'''# 问题三：分时预报驱动的滚动购电调整
 
 每天0:00使用附件3的00:00光伏预报、附件2历史训练的负荷Ridge预测和附件1电价生成不可覆盖的原始计划G0。06:00、12:00和18:00只修改尚未执行时段；决策使用当次及更早发布的预报、当前真实SOC和截至该时点已实现的数据。当前10分钟区间开始前观测负荷与光伏，再执行储能反馈；未来真实轨迹不进入规划。
 
-附件3的整点功率在同一次发布内线性插值到10分钟网格，再除以6转为电量。发布后首小时缺失左锚点沿用该次发布的第1小时预测值，不使用未来实际光伏。PV场景误差取同发布时刻、同提前量的历史预报误差；负荷与PV使用同一历史日的完整联合残差轨迹，所有源日期严格早于目标日。
+附件3的整点功率在同一次发布内线性插值到10分钟网格，再除以6转为电量。发布时点的左端功率只取截至该时点已经结束的最后一个10分钟实际时段：06/12/18时分别取当日slot36/72/108，00:00取前一日slot144；2025-01-01没有前一日数据时显式回退到首个整点预报。左锚点与下一整点预报线性衔接，发布后的未来实际光伏不参与。PV场景误差使用各历史场景日当时可得的对应锚点；负荷与PV使用同一历史日的完整联合残差轨迹，所有源日期严格早于目标日。
 
 本轮采用相对00:00原计划的最终交付方案结算：非紧急费用为 `sum(p*F + 0.5*p*abs(F-G0))`，紧急费用为 `sum(5*p*R)`。因此p=1时，100调整到80、120和100的非紧急费用分别为90、130和100；100->140->100最终仍为100。逐次相邻计划收费会得到140，只作为另一种解释的局限，不与主结果混用。
 
@@ -120,10 +123,22 @@ C1相对C0减少 `{c0-c1:.3f}` 元（`{(1-c1/c0)*100:.3f}%`），表示仅把新
 
 {tables(accuracy)}
 
+原始整点预报、旧bfill轨迹和新观测锚点轨迹必须分开解释。正式期分层诊断如下；`supplier_raw_hourly`只在原始整点目标上评价，不与10分钟融合轨迹混称：
+
+{tables(boundary_formal)}
+
+## 18:00发布消融
+
+固定C3、delta、场景数、随机种子、初始SOC和结算规则后，全年连续比较允许06/12/18更新与仅允许06/12更新：
+
+{tables(ablation)}
+
+仅允许06/12时，18:00预报既不进入购电修订，也不进入储能反馈。结果显示保留18:00发布降低了真实总费用、紧急费用及两类实际日CVaR，但增加了修订次数，因此其他发布时间预报具有可量化价值，同时存在运行复杂度代价。
+
 逐次相邻计划收费解释的敏感性另存于 `outputs/q3/q3_settlement_interpretation_sensitivity.csv`。该表只是“固定既有政策轨迹的重新计价”，没有在另一结算规则下重新优化，因此不能用于宣称另一规则下策略仍最优。固定轨迹重计价总费用为 C1={repricing_totals.get('C1',np.nan):.3f} 元、C2={repricing_totals.get('C2',np.nan):.3f} 元、C3={repricing_totals.get('C3',np.nan):.3f} 元。
 
 ## 局限
 
-场景库仅覆盖一个自然年，早期历史样本少并允许有放回抽样。调整收费按最终计划相对原始计划结算；若权威补充说明要求逐次修订收费，频繁调整策略的费用会更高。NV是预测的风险调整目标改善值，不等于事后实际节费或严格EVSI。问题四尚未实现。
+场景库仅覆盖一个自然年，早期历史样本少并允许有放回抽样。10个等权场景且alpha=0.95时，规划紧急费用CVaR等于最坏场景费用，不能解释成稳定尾部估计。调整收费按最终计划相对原始计划结算；若权威补充说明要求逐次修订收费，频繁调整策略的费用会更高。NV是预测的风险调整目标改善值，不等于事后实际节费或严格EVSI。受限价格信息、另一结算机制下重新优化与跨日终端价值属于后续扩展。
 '''
 (reports/'q3_analysis.md').write_text(report,encoding='utf-8')

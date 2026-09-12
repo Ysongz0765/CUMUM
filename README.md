@@ -24,6 +24,11 @@ $py = "C:\Users\dell\.cache\codex-runtimes\codex-primary-runtime\dependencies\py
 & $py scripts/17_build_q4_report.py
 & $py scripts/18_validate_q4.py
 & $py scripts/19_q4_repro_check.py
+& $py scripts/20_forecast_boundary_diagnostics.py
+& $py scripts/21_run_q3_18h_ablation.py
+& $py scripts/22_planning_execution_diagnostics.py
+& $py scripts/23_q3_q4_3_repro_check.py
+& $py scripts/24_build_revision_reports.py
 & $py -m pytest -q
 ```
 
@@ -35,7 +40,9 @@ $py = "C:\Users\dell\.cache\codex-runtimes\codex-primary-runtime\dependencies\py
 
 `07_package_verified.py` 会重新生成项目压缩包，将其解压到临时目录，核对关键文件 SHA256，并在解压副本中运行验收脚本和测试。问题二正式执行明细为 `outputs/q2/q2_execution_detail.csv`（3 策略共 144288 行），官方表为 `outputs/q2/result2.xlsx`；问题一官方表为 `outputs/q1/result1.xlsx`。
 
-问题三主结算按最终生效计划相对 00:00 原计划计费：`p*F + 0.5*p*abs(F-G0)`，另加 `5*p*R` 紧急购电费。C0/C1 固定购电计划，C2 定期调整，C3 按 1 月选出的 NV 阈值触发调整。问题三只使用附件1电价、附件2实际与附件3光伏预报；所有场景源日期早于目标日。
+问题三主结算按最终生效计划相对 00:00 原计划计费：`p*F + 0.5*p*abs(F-G0)`，另加 `5*p*R` 紧急购电费。C0/C1 固定购电计划，C2 定期调整，C3 按 1 月选出的 NV 阈值触发调整。问题三只使用附件1电价、附件2实际与附件3光伏预报；所有场景源日期早于目标日。附件3的首小时边界使用发布时点前刚结束的实际光伏时段作为左锚点，与下一整点预报线性衔接；00:00使用前一日slot144，缺少前日数据时显式回退。旧bfill仅保留用于诊断对照。
+
+Q3的18:00发布消融由 `21_run_q3_18h_ablation.py` 单独运行，不覆盖官方结果；`22_planning_execution_diagnostics.py` 计算固定G、真实整日轨迹下的完美信息追索下界，仅用于区分规划场景偏差和因果执行信息损失，不进入正式策略。Q3/Q4-3的单日无调度缓存复算由 `23_q3_q4_3_repro_check.py` 完成。
 
 问题二固定使用附件1电价，附件4只供问题四使用。问题二预测只读附件2历史，不使用附件3。所有日前特征和残差源必须满足 `date < target_date`；执行器固定0:00制定的G，只在本时段观测到来后因果调整储能和紧急购电。长运行缓存按代码、配置和输入签名隔离。
 

@@ -1,0 +1,13 @@
+{
+  "signature": "17af63c1e4da344e8067ceb9a6814365e833dc5dd91ce748e04b57d499985df4",
+  "formal_q3_signature": "c624226e6fad7922c7ac4468cf35e18c4ae1062daaf8d67d5100a1b77150f88f",
+  "selected_delta_yuan": 500.0,
+  "allowed_update_hours": [
+    6,
+    12
+  ],
+  "common_feb1_soc_kwh": 4910.116222222223,
+  "rows": 48096,
+  "runtime_seconds": 630.9274497032166,
+  "checkpoint_directory": "outputs\\q3\\cache\\q3_18h_ablation\\17af63c1e4da344e"
+}

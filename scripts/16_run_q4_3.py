@@ -34,7 +34,7 @@ Q3.update({
     "calibration_start": Q4["calibration_start"], "calibration_end": Q4["calibration_end"],
 })
 dependencies = [
-    Path(__file__), ROOT / "src/microgrid/q3.py", ROOT / "src/microgrid/q4.py",
+    Path(__file__), ROOT / "src/microgrid/q3.py", ROOT / "src/microgrid/io.py", ROOT / "src/microgrid/q4.py",
     ROOT / "src/microgrid/execution.py", ROOT / "src/microgrid/models/adjustment_dispatch.py",
     ROOT / "src/microgrid/models/stochastic_dispatch.py", ROOT / "configs/config.yaml",
     ROOT / "data/raw/附件2.xlsx", ROOT / "data/raw/附件3.xlsx", ROOT / "data/raw/附件4.xlsx",
@@ -144,6 +144,7 @@ manifest = {
     "common_feb1_soc_kwh": WARMUP_MANIFEST["feb1_initial_soc_kwh"],
     "scenario_count": Q4["scenario_count_q4_3"], "cvar_alpha": Q4["cvar_alpha"],
     "cvar_lambda": Q4["b4_lambda"], "selected_delta_yuan": selected_delta,
+    "forecast_boundary_method": "observed_anchor",
     "main_policy": Q4["main_policy_q4_3"], "rows": len(execution),
     "checkpoint_directory": str(checkpoint.relative_to(ROOT)),
 }

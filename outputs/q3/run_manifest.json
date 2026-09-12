@@ -1,10 +1,13 @@
 {
-  "signature": "d5976e67ac3346b953e0a73c832ff93b2c668ecc329bb8236d4d8d5857a72993",
-  "runtime_seconds": 3129.2169432640076,
+  "signature": "c624226e6fad7922c7ac4468cf35e18c4ae1062daaf8d67d5100a1b77150f88f",
+  "prediction_signature": "b793e7c19c5fff5682baef31f0f80f7dcecdf64a8f4126e052c1d6f8ceb376a3",
+  "runtime_seconds": 2224.04683470726,
   "python": "C:\\Users\\dell\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe",
   "common_feb1_soc_kwh": 4910.116222222223,
   "selected_delta_yuan": 500.0,
   "main_policy": "C3",
   "scenario_count": 10,
-  "rows": 192384
+  "forecast_boundary_method": "observed_anchor",
+  "rows": 192384,
+  "checkpoint_directory": "outputs\\q3\\cache\\q3\\c624226e6fad7922"
 }

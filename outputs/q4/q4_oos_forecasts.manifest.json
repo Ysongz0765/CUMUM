@@ -1,5 +1,5 @@
 {
-  "prediction_signature": "7792a4edf320ba39c23f1025c2d1e53217c8a0766f1aef3e922cecc1b07f09ef",
+  "prediction_signature": "6061a798937c56ece5f37ac12ad32012c2c86f580f88149fe76ede0eeee01ac0",
   "price_independent": true,
   "forecast_choice": {
     "load_method": "ridge",

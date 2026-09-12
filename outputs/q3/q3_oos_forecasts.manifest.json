@@ -1,0 +1,11 @@
+{
+  "prediction_signature": "b793e7c19c5fff5682baef31f0f80f7dcecdf64a8f4126e052c1d6f8ceb376a3",
+  "price_independent": true,
+  "dependencies": [
+    "src\\microgrid\\prediction.py",
+    "src\\microgrid\\features.py",
+    "src\\microgrid\\io.py",
+    "configs\\config.yaml",
+    "data\\raw\\附件2.xlsx"
+  ]
+}

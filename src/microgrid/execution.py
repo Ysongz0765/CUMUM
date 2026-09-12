@@ -16,8 +16,13 @@ def _fixed_grid_matrix(h, eta_c, eta_d):
         if j: rr.append(row);cc.append(4*h+j-1);vv.append(-1)
     return coo_matrix((vv,(rr,cc)),shape=(2*h,5*h)).tocsr()
 
-def _solve_fixed_grid_remaining(g_kwh, load_kwh, pv_kwh, price, initial_soc_kwh, battery_config, terminal_soc_kwh=None):
-    """Solve the remaining fixed-G recourse LP and return its first action."""
+def solve_fixed_grid_horizon(g_kwh, load_kwh, pv_kwh, price, initial_soc_kwh, battery_config, terminal_soc_kwh=None):
+    """Solve a fixed-G horizon with fully supplied trajectories.
+
+    This public helper is used for offline diagnostics.  Passing actual values
+    for the whole horizon creates a perfect-information recourse lower bound;
+    it must not be used by the causal execution policy.
+    """
     h=len(g_kwh); eta_c=battery_config['charge_efficiency']; eta_d=battery_config['discharge_efficiency']; cmax=battery_config['max_charge_power_kw']/6; dmax=battery_config['max_discharge_power_kw']/6
     # x=[R,C,D,W,S], all quantities are kWh per 10-minute slot.
     n=5*h; obj=np.zeros(n); obj[:h]=5*np.asarray(price,float); obj[h:4*h]=1e-7
@@ -28,7 +33,22 @@ def _solve_fixed_grid_remaining(g_kwh, load_kwh, pv_kwh, price, initial_soc_kwh,
     if terminal_soc_kwh is not None: bounds[-1]=(terminal_soc_kwh,terminal_soc_kwh)
     r=linprog(obj,A_eq=_fixed_grid_matrix(h,eta_c,eta_d),b_eq=np.asarray(beq),bounds=bounds,method='highs')
     if not r.success: raise RuntimeError(f'fixed-G recourse infeasible: {r.message}')
-    x=r.x; return float(x[0]),float(x[h]),float(x[2*h]),float(x[3*h]),float(x[4*h])
+    x=r.x
+    return pd.DataFrame({
+        'slot':np.arange(1,h+1),
+        'emergency_purchase_kwh':x[:h],
+        'charge_kwh':x[h:2*h],
+        'discharge_kwh':x[2*h:3*h],
+        'remaining_energy_kwh':x[3*h:4*h],
+        'soc_end_kwh':x[4*h:5*h],
+        'emergency_cost_yuan':5*np.asarray(price,float)*x[:h],
+    })
+
+def _solve_fixed_grid_remaining(g_kwh, load_kwh, pv_kwh, price, initial_soc_kwh, battery_config, terminal_soc_kwh=None):
+    """Solve the remaining fixed-G recourse LP and return its first action."""
+    horizon=solve_fixed_grid_horizon(g_kwh,load_kwh,pv_kwh,price,initial_soc_kwh,battery_config,terminal_soc_kwh)
+    first=horizon.iloc[0]
+    return tuple(float(first[name]) for name in ('emergency_purchase_kwh','charge_kwh','discharge_kwh','remaining_energy_kwh','soc_end_kwh'))
 
 def execute_fixed_grid_plan(date,grid_plan_kwh,load_actual_kwh,pv_actual_kwh,load_forecast_kwh,pv_forecast_kwh,price,initial_soc_kwh,battery_config,policy,terminal_soc_kwh=None):
     T=len(grid_plan_kwh); s=float(initial_soc_kwh); rows=[]; eta_c=battery_config['charge_efficiency'];eta_d=battery_config['discharge_efficiency'];smin=battery_config['soc_min_kwh'];smax=battery_config['soc_max_kwh'];cmax=battery_config['max_charge_power_kw']/6;dmax=battery_config['max_discharge_power_kw']/6

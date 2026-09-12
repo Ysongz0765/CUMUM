@@ -16,7 +16,7 @@ tol, cost_tol = 1e-6, 0.01
 x = pd.read_csv(Path(os.environ.get('Q3_DETAIL_PATH', OUT / 'q3_execution_detail.csv')), parse_dates=['date'])
 rv = pd.read_csv(OUT / 'q3_revision_log.csv', parse_dates=['date', 'decision_time'])
 sn = pd.read_csv(OUT / 'q3_plan_snapshots.csv', parse_dates=['date', 'decision_time'])
-src = pd.read_csv(OUT / 'q3_scenario_sources.csv', parse_dates=['source_date', 'target_date', 'training_cutoff', 'decision_time'])
+src = pd.read_csv(OUT / 'q3_scenario_sources.csv', parse_dates=['source_date', 'target_date', 'training_cutoff', 'decision_time', 'source_observation_cutoff', 'target_observation_cutoff'])
 actual = read_actual(ROOT / 'data/raw')
 actual['load_kwh'] = actual.load_kw / 6
 actual['pv_actual_kwh'] = actual.pv_actual_kw / 6
@@ -48,6 +48,7 @@ e['charge_limit_ok'] = bool(x.charge_kwh.max() <= battery['max_charge_power_kw']
 e['discharge_limit_ok'] = bool(x.discharge_kwh.max() <= battery['max_discharge_power_kw'] * cfg['time']['delta_hours'] + tol)
 e['nonnegative'] = bool((x[['original_grid_plan_kwh', 'final_grid_plan_kwh', 'emergency_purchase_kwh', 'charge_kwh', 'discharge_kwh', 'remaining_energy_kwh']] >= -tol).all().all())
 e['simultaneous_charge_discharge_count'] = int(((x.charge_kwh > tol) & (x.discharge_kwh > tol)).sum())
+e['no_simultaneous_charge_discharge'] = e['simultaneous_charge_discharge_count'] == 0
 p = x.slot.map(price).to_numpy()
 original_fee = p * x.original_grid_plan_kwh
 final_fee = p * x.final_grid_plan_kwh + .5 * p * np.abs(x.final_grid_plan_kwh - x.original_grid_plan_kwh)
@@ -59,6 +60,12 @@ e['max_total_fee_error_yuan'] = float(np.max(np.abs(final_fee + emergency_fee - 
 e['fees_ok'] = max(e['max_original_fee_error_yuan'], e['max_final_fee_error_yuan'], e['max_emergency_fee_error_yuan'], e['max_total_fee_error_yuan']) <= cost_tol
 e['scenario_sources_historical'] = bool((src.source_date < src.target_date).all() and (src.training_cutoff < src.target_date).all())
 e['scenario_weights_normalized'] = bool(np.allclose(src.groupby(['policy', 'target_date', 'issue_hour', 'decision_time']).weight.sum(), 1, atol=tol, rtol=0))
+expected_source_cutoff = src.source_date + pd.to_timedelta(src.issue_hour, unit='h')
+e['historical_anchor_cutoffs_exact'] = bool(
+    src.boundary_method.eq('observed_anchor').all()
+    and (src.source_observation_cutoff == expected_source_cutoff).all()
+    and (src.target_observation_cutoff == src.decision_time).all()
+)
 e['revision_boundaries_ok'] = bool((sn.slot > sn.issue_hour * 6).all())
 e['fixed_policies_unchanged'] = bool(np.allclose(x[x.policy.isin(['C0', 'C1'])].original_grid_plan_kwh, x[x.policy.isin(['C0', 'C1'])].final_grid_plan_kwh, atol=tol, rtol=0))
 
@@ -67,18 +74,25 @@ book = load_workbook(OUT / 'result3.xlsx', data_only=True)
 raw = load_workbook(ROOT / 'data/raw/templates/result3.xlsx', data_only=True)
 e['template_sheets_preserved'] = book.sheetnames == raw.sheetnames
 e['plan_headers_preserved'] = all([book.worksheets[k].cell(1, c).value for c in range(1, 148)] == [raw.worksheets[k].cell(1, c).value for c in range(1, 148)] for k in (0, 1))
-plan_ok, block_ok, soc_ok = [], [], []
+plan_ok, daily_ok, block_ok, soc_ok = [], [], [], []
 for rr, date in enumerate(dates, start=2):
     z = main[main.date == date].sort_values('slot')
     for col in range(2, 146):
         left=str(book.worksheets[0].cell(1,col).value).split('-')[0].replace('+1','');hour,minute=map(int,left.split(':'));slot=hour*6+minute//10+1
         row=z[z.slot==slot].iloc[0]
         plan_ok.extend([np.isclose(book.worksheets[0].cell(rr, col).value, row.original_grid_plan_kwh, atol=tol, rtol=0), np.isclose(book.worksheets[1].cell(rr, col).value, row.final_grid_plan_kwh, atol=tol, rtol=0)])
+    daily_ok.extend([
+        np.isclose(book.worksheets[0].cell(rr,146).value,z.original_grid_plan_kwh.sum(),atol=tol,rtol=0),
+        np.isclose(book.worksheets[0].cell(rr,147).value,z.original_plan_cost_yuan.sum(),atol=cost_tol,rtol=0),
+        np.isclose(book.worksheets[1].cell(rr,146).value,z.final_grid_plan_kwh.sum(),atol=tol,rtol=0),
+        np.isclose(book.worksheets[1].cell(rr,147).value,z.final_non_emergency_cost_yuan.sum(),atol=cost_tol,rtol=0),
+    ])
     start = 2 + (rr - 2) * 6
     for k in range(6):
         block_ok.extend([np.isclose(book.worksheets[2].cell(start + k, 3).value, z.charge_kwh.iloc[k * 24:(k + 1) * 24].sum(), atol=tol, rtol=0), np.isclose(book.worksheets[2].cell(start + k, 4).value, z.discharge_kwh.iloc[k * 24:(k + 1) * 24].sum(), atol=tol, rtol=0)])
     soc_ok.extend([np.isclose(book.worksheets[2].cell(start, 6).value, z.soc_start_kwh.iloc[0], atol=tol, rtol=0), np.isclose(book.worksheets[2].cell(start + 1, 6).value, z.soc_end_kwh.iloc[-1], atol=tol, rtol=0)])
 e['every_plan_cell_matches'] = bool(all(plan_ok))
+e['daily_totals_costs_match'] = bool(all(daily_ok))
 e['every_4hour_block_matches'] = bool(all(block_ok))
 e['every_daily_soc_matches'] = bool(all(soc_ok))
 expected = []
@@ -94,7 +108,22 @@ for row in range(2, book.worksheets[3].max_row + 1):
     if '+1' in label or (eh == 0 and em == 0): end = 143
     observed.append((current_date, start, end, float(book.worksheets[3].cell(row, 3).value)))
 e['emergency_intervals_exact'] = len(expected) == len(observed) and all(a[:3] == b[:3] and np.isclose(a[3], b[3], atol=tol, rtol=0) for a, b in zip(expected, observed))
-required = ['row_count_ok', 'keys_unique', 'finite', 'complete_slots_dates', 'actual_matches_attachment2', 'attachment1_price_used', 'balance_ok', 'soc_recursion_ok', 'soc_continuity_ok', 'soc_bounds_ok', 'charge_limit_ok', 'discharge_limit_ok', 'nonnegative', 'fees_ok', 'scenario_sources_historical', 'scenario_weights_normalized', 'revision_boundaries_ok', 'fixed_policies_unchanged', 'template_sheets_preserved', 'plan_headers_preserved', 'every_plan_cell_matches', 'every_4hour_block_matches', 'every_daily_soc_matches', 'emergency_intervals_exact']
+
+# Controlled C3 ablation: 18:00 must be absent from revisions, scenarios, and
+# therefore the feedback forecast; physics and state continuity remain exact.
+abl = pd.read_csv(OUT/'q3_18h_ablation_execution_detail.csv',parse_dates=['date'])
+abl_rv = pd.read_csv(OUT/'q3_18h_ablation_revision_log.csv')
+abl_src = pd.read_csv(OUT/'q3_18h_ablation_scenario_sources.csv')
+e['ablation_rows_ok'] = len(abl) == 334*144
+e['ablation_complete_slots_dates'] = bool(abl.groupby('date').slot.apply(lambda s:np.array_equal(s.to_numpy(),np.arange(1,145))).all() and pd.DatetimeIndex(abl.date.unique()).equals(dates))
+abl_join=abl.merge(actual,on=['date','slot'],suffixes=('','_raw'),validate='one_to_one')
+abl_balance=abl_join.final_grid_plan_kwh+abl_join.emergency_purchase_kwh+abl_join.pv_actual_kwh_raw+abl_join.discharge_kwh-abl_join.load_kwh-abl_join.charge_kwh-abl_join.remaining_energy_kwh
+abl_soc=abl.soc_end_kwh-(abl.soc_start_kwh+battery['charge_efficiency']*abl.charge_kwh-abl.discharge_kwh/battery['discharge_efficiency'])
+abl_starts=abl.groupby('date').soc_start_kwh.first();abl_ends=abl.groupby('date').soc_end_kwh.last()
+e['ablation_physics_ok'] = bool(abl_balance.abs().max()<=tol and abl_soc.abs().max()<=tol and np.max(np.abs(abl_starts.iloc[1:].to_numpy()-abl_ends.iloc[:-1].to_numpy()))<=tol)
+e['ablation_no_18h_information'] = bool(set(abl_rv.issue_hour)=={6,12} and set(abl_src.issue_hour)=={0,6,12})
+e['ablation_no_simultaneous_charge_discharge'] = not bool(((abl.charge_kwh>tol)&(abl.discharge_kwh>tol)).any())
+required = ['row_count_ok', 'keys_unique', 'finite', 'complete_slots_dates', 'actual_matches_attachment2', 'attachment1_price_used', 'balance_ok', 'soc_recursion_ok', 'soc_continuity_ok', 'soc_bounds_ok', 'charge_limit_ok', 'discharge_limit_ok', 'nonnegative', 'no_simultaneous_charge_discharge', 'fees_ok', 'scenario_sources_historical', 'scenario_weights_normalized', 'historical_anchor_cutoffs_exact', 'revision_boundaries_ok', 'fixed_policies_unchanged', 'template_sheets_preserved', 'plan_headers_preserved', 'every_plan_cell_matches', 'daily_totals_costs_match', 'every_4hour_block_matches', 'every_daily_soc_matches', 'emergency_intervals_exact', 'ablation_rows_ok', 'ablation_complete_slots_dates', 'ablation_physics_ok', 'ablation_no_18h_information', 'ablation_no_simultaneous_charge_discharge']
 failed = [key for key in required if not e.get(key, False)]
 (ROOT / 'reports/q3_acceptance_evidence.json').write_text(json.dumps(e, ensure_ascii=False, indent=2), encoding='utf-8')
 print(json.dumps(e, ensure_ascii=False, indent=2))

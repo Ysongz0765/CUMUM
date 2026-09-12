@@ -13,7 +13,7 @@ from microgrid.models.stochastic_dispatch import empirical_cvar
 
 ROOT=Path(__file__).parents[1];out=ROOT/'outputs/q3';reports=ROOT/'reports';figs=reports/'figures/q3';out.mkdir(parents=True,exist_ok=True);figs.mkdir(parents=True,exist_ok=True)
 cfg=load_config();b=cfg['battery'];q3=cfg['q3'];raw=ROOT/'data/raw';price=get_q2_daily_price(raw).price_yuan_per_kwh.to_numpy();actual=read_processed(ROOT/'data/processed/actual_10min.parquet');forecast_long=read_pv_forecast(raw/'附件3.xlsx')
-signature=sha256(b''.join(p.read_bytes() for p in [Path(__file__),ROOT/'src/microgrid/q3.py',ROOT/'src/microgrid/models/adjustment_dispatch.py',ROOT/'src/microgrid/execution.py',ROOT/'src/microgrid/prediction.py',ROOT/'configs/config.yaml',raw/'附件1.xlsx',raw/'附件2.xlsx',raw/'附件3.xlsx'])).hexdigest()
+signature=sha256(b''.join(p.read_bytes() for p in [Path(__file__),ROOT/'src/microgrid/q3.py',ROOT/'src/microgrid/io.py',ROOT/'src/microgrid/models/adjustment_dispatch.py',ROOT/'src/microgrid/execution.py',ROOT/'src/microgrid/prediction.py',ROOT/'configs/config.yaml',raw/'附件1.xlsx',raw/'附件2.xlsx',raw/'附件3.xlsx'])).hexdigest()
 prediction_dependencies=[ROOT/'src/microgrid/prediction.py',ROOT/'src/microgrid/features.py',ROOT/'src/microgrid/io.py',ROOT/'configs/config.yaml',raw/'附件2.xlsx']
 prediction_signature=sha256(b''.join(p.read_bytes() for p in prediction_dependencies)).hexdigest()
 started=time.time();oos_path=out/'q3_oos_forecasts.csv';oos_manifest=out/'q3_oos_forecasts.manifest.json'
@@ -35,24 +35,35 @@ for delta in q3['delta_candidates_yuan']:
     cal.append({'delta_yuan':delta,'january_total_cost_yuan':sum(costs),'january_daily_total_cvar95_yuan':empirical_cvar(costs,np.ones(len(costs))/len(costs),.95),'january_daily_emergency_cvar95_yuan':empirical_cvar(emergency,np.ones(len(emergency))/len(emergency),.95),'revision_count':triggers,'terminal_soc_kwh':soc})
 cal=pd.DataFrame(cal);best=cal.sort_values(['january_total_cost_yuan','january_daily_emergency_cvar95_yuan','revision_count']).iloc[0];delta=float(best.delta_yuan);cal['selected']=cal.delta_yuan.eq(delta);cal.to_csv(out/'q3_delta_selection.csv',index=False)
 
-common_soc=float(warm.soc_end_kwh.iloc[-1]);socs={p:common_soc for p in ('C0','C1','C2','C3')};execs=[];revisions=[];snapshots=[];sources=[]
+common_soc=float(warm.soc_end_kwh.iloc[-1]);socs={p:common_soc for p in ('C0','C1','C2','C3')}
 dates=pd.date_range('2025-02-01','2025-12-31')
+checkpoint=out/'cache/q3'/signature[:16];checkpoint.mkdir(parents=True,exist_ok=True)
 for day_no,d in enumerate(dates,start=1):
-    day_results={}
-    for policy in ('C0','C1','C2'):
-        z=run_q3_day(d,policy,socs[policy],actual,oos,forecast_long,price,b,q3,delta,cfg['random_seed']);day_results[policy]=z;socs[policy]=float(z.execution.soc_end_kwh.iloc[-1])
-    if delta==0:
-        base=day_results['C2'];ex=base.execution.copy();ex['policy']='C3';rv=base.revisions.copy();rv['policy']='C3';sn=base.snapshots.copy();sn['policy']='C3';ss=base.scenario_sources.copy();ss['policy']='C3';z=type(base)(ex,rv,sn,ss)
-    else:z=run_q3_day(d,'C3',socs['C3'],actual,oos,forecast_long,price,b,q3,delta,cfg['random_seed'])
-    day_results['C3']=z;socs['C3']=float(z.execution.soc_end_kwh.iloc[-1])
-    for z in day_results.values():
-        execs.append(z.execution)
-        if len(z.revisions):revisions.append(z.revisions)
-        if len(z.snapshots):snapshots.append(z.snapshots)
-        sources.append(z.scenario_sources)
+    stem=d.strftime('%Y-%m-%d');state_path=checkpoint/f'{stem}_state.json';names=('execution','revisions','snapshots','sources');paths={name:checkpoint/f'{stem}_{name}.csv' for name in names}
+    reusable=state_path.exists() and all(path.exists() for path in paths.values())
+    if reusable:
+        state=json.loads(state_path.read_text(encoding='utf-8'));reusable=state.get('signature')==signature and state.get('selected_delta')==delta and all(abs(float(state.get('initial_socs',{}).get(policy,np.inf))-socs[policy])<=1e-7 for policy in socs)
+    if reusable:
+        socs={policy:float(value) for policy,value in state['terminal_socs'].items()}
+    else:
+        initial_socs=socs.copy();day_results={}
+        for policy in ('C0','C1','C2'):
+            z=run_q3_day(d,policy,socs[policy],actual,oos,forecast_long,price,b,q3,delta,cfg['random_seed']);day_results[policy]=z;socs[policy]=float(z.execution.soc_end_kwh.iloc[-1])
+        if delta==0:
+            base=day_results['C2'];ex=base.execution.copy();ex['policy']='C3';rv=base.revisions.copy();rv['policy']='C3';sn=base.snapshots.copy();sn['policy']='C3';ss=base.scenario_sources.copy();ss['policy']='C3';z=type(base)(ex,rv,sn,ss)
+        else:z=run_q3_day(d,'C3',socs['C3'],actual,oos,forecast_long,price,b,q3,delta,cfg['random_seed'])
+        day_results['C3']=z;socs['C3']=float(z.execution.soc_end_kwh.iloc[-1])
+        pd.concat([z.execution for z in day_results.values()],ignore_index=True).to_csv(paths['execution'],index=False)
+        pd.concat([z.revisions for z in day_results.values() if len(z.revisions)],ignore_index=True).to_csv(paths['revisions'],index=False)
+        pd.concat([z.snapshots for z in day_results.values() if len(z.snapshots)],ignore_index=True).to_csv(paths['snapshots'],index=False)
+        pd.concat([z.scenario_sources for z in day_results.values()],ignore_index=True).to_csv(paths['sources'],index=False)
+        state_path.write_text(json.dumps({'signature':signature,'selected_delta':delta,'date':stem,'initial_socs':initial_socs,'terminal_socs':socs},indent=2),encoding='utf-8')
     if day_no%5==0 or day_no==len(dates):print(f'q3 {day_no}/{len(dates)} elapsed={time.time()-started:.1f}s',flush=True)
 
-execution=pd.concat(execs,ignore_index=True);revision=pd.concat(revisions,ignore_index=True);snapshot=pd.concat(snapshots,ignore_index=True);source=pd.concat(sources,ignore_index=True)
+execution=pd.concat([pd.read_csv(checkpoint/f'{d:%Y-%m-%d}_execution.csv',parse_dates=['date']) for d in dates],ignore_index=True)
+revision=pd.concat([pd.read_csv(checkpoint/f'{d:%Y-%m-%d}_revisions.csv',parse_dates=['date','decision_time','observation_cutoff']) for d in dates],ignore_index=True)
+snapshot=pd.concat([pd.read_csv(checkpoint/f'{d:%Y-%m-%d}_snapshots.csv',parse_dates=['date','decision_time']) for d in dates],ignore_index=True)
+source=pd.concat([pd.read_csv(checkpoint/f'{d:%Y-%m-%d}_sources.csv',parse_dates=['source_date','target_date','training_cutoff','decision_time','source_observation_cutoff','target_observation_cutoff']) for d in dates],ignore_index=True)
 execution.to_csv(out/'q3_execution_detail.csv',index=False);revision.to_csv(out/'q3_revision_log.csv',index=False);snapshot.to_csv(out/'q3_plan_snapshots.csv',index=False);source.to_csv(out/'q3_scenario_sources.csv',index=False)
 daily=execution.groupby(['policy','date']).agg(original_plan_cost_yuan=('original_plan_cost_yuan','sum'),final_non_emergency_cost_yuan=('final_non_emergency_cost_yuan','sum'),adjustment_net_cost_yuan=('adjustment_net_cost_yuan','sum'),emergency_cost_yuan=('emergency_cost_yuan','sum'),total_cost_yuan=('total_cost_yuan','sum'),emergency_purchase_kwh=('emergency_purchase_kwh','sum'),remaining_energy_kwh=('remaining_energy_kwh','sum'),charge_kwh=('charge_kwh','sum'),discharge_kwh=('discharge_kwh','sum'),soc_min_kwh=('soc_end_kwh','min'),soc_max_kwh=('soc_end_kwh','max'),terminal_soc_kwh=('soc_end_kwh','last')).reset_index();daily.to_csv(out/'q3_daily_summary.csv',index=False)
 comparison=[]
@@ -66,9 +77,9 @@ acc=[]
 for d in dates:
     truth=actual[actual.date==d].sort_values('slot').pv_actual_kw.to_numpy()
     from microgrid.q3 import issue_pv_day
-    base=issue_pv_day(forecast_long,d,0)*6
+    base=issue_pv_day(forecast_long,d,0,actual)*6
     for h in q3['issue_hours']:
-        latest=issue_pv_day(forecast_long,d,h)*6;start=h*6;e0=base[start:]-truth[start:];el=latest[start:]-truth[start:]
+        latest=issue_pv_day(forecast_long,d,h,actual)*6;start=h*6;e0=base[start:]-truth[start:];el=latest[start:]-truth[start:]
         acc.append({'date':d,'issue_hour':h,'observations':len(el),'original_mae_kw':np.abs(e0).mean(),'latest_mae_kw':np.abs(el).mean(),'original_rmse_kw':np.sqrt(np.mean(e0**2)),'latest_rmse_kw':np.sqrt(np.mean(el**2))})
 pd.DataFrame(acc).to_csv(out/'q3_forecast_update_accuracy.csv',index=False)
 
@@ -102,5 +113,5 @@ for d,x in m.groupby('date'):
 wb.save(out/'result3.xlsx')
 
 keydates=pd.to_datetime(['2025-03-20','2025-06-21','2025-09-23','2025-12-21']);m[m.date.isin(keydates)].to_csv(out/'q3_key_dates_detail.csv',index=False)
-manifest={'signature':signature,'prediction_signature':prediction_signature,'runtime_seconds':time.time()-started,'python':sys.executable,'common_feb1_soc_kwh':common_soc,'selected_delta_yuan':delta,'main_policy':main,'scenario_count':q3['scenario_count'],'rows':len(execution)}
+manifest={'signature':signature,'prediction_signature':prediction_signature,'runtime_seconds':time.time()-started,'python':sys.executable,'common_feb1_soc_kwh':common_soc,'selected_delta_yuan':delta,'main_policy':main,'scenario_count':q3['scenario_count'],'forecast_boundary_method':'observed_anchor','rows':len(execution),'checkpoint_directory':str(checkpoint.relative_to(ROOT))}
 (out/'run_manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8');print(comparison.to_string(index=False));print(json.dumps(manifest,ensure_ascii=False,indent=2))

@@ -106,15 +106,80 @@ def read_pv_forecast(path: Path) -> pd.DataFrame:
     if not (out.groupby(['date','issue_hour']).size()==24).all(): raise ValueError('附件3每次发布必须有24个小时预测')
     return out
 
-def build_10min_pv_forecast(forecast_long: pd.DataFrame, date, issue_time: str, method: str = "linear") -> pd.DataFrame:
-    """Return an issue's forecast trajectory on a 10-minute grid; no actual PV is used."""
-    if method != "linear": raise ValueError("only linear interpolation is supported")
-    issue_hour=int(str(issue_time).split(':')[0])
-    x = forecast_long[(forecast_long.date == pd.Timestamp(date).normalize()) & (forecast_long.issue_hour == issue_hour)].sort_values("target_datetime")
-    if x.empty: raise KeyError((date, issue_time))
-    times = pd.date_range(x.issue_datetime.iloc[0] + pd.Timedelta(minutes=10), x.target_datetime.max(), freq="10min")
-    vals = pd.Series(x.pv_forecast_kw.to_numpy(), index=x.target_datetime).reindex(times).interpolate(method="time").bfill().ffill()
-    return pd.DataFrame({"target_datetime": times, "pv_forecast_kw": vals.to_numpy()})
+def build_10min_pv_forecast(
+    forecast_long: pd.DataFrame,
+    date,
+    issue_time: str,
+    *,
+    left_anchor_kw=None,
+    anchor_source=None,
+    boundary_method: str = "observed_anchor",
+) -> pd.DataFrame:
+    """Build a causal 10-minute trajectory while preserving supplied hourly points.
+
+    ``observed_anchor`` linearly joins an explicitly supplied, issue-time left
+    endpoint to the first hourly forecast.  If no earlier observation exists,
+    the deterministic fallback uses the first hourly forecast itself.  The old
+    ``legacy_bfill`` behavior remains available for diagnostics only.
+    """
+    issue_hour = int(str(issue_time).split(":")[0])
+    day = pd.Timestamp(date).normalize()
+    x = forecast_long[
+        (forecast_long.date == day) & (forecast_long.issue_hour == issue_hour)
+    ].sort_values("target_datetime")
+    if x.empty:
+        raise KeyError((date, issue_time))
+    if boundary_method not in {"observed_anchor", "legacy_bfill"}:
+        raise ValueError(f"unsupported forecast boundary method: {boundary_method}")
+
+    issue_datetime = pd.Timestamp(x.issue_datetime.iloc[0])
+    times = pd.date_range(
+        issue_datetime + pd.Timedelta(minutes=10),
+        x.target_datetime.max(),
+        freq="10min",
+    )
+    hourly = pd.Series(
+        x.pv_forecast_kw.to_numpy(float),
+        index=pd.DatetimeIndex(x.target_datetime),
+    )
+    if boundary_method == "legacy_bfill":
+        values = hourly.reindex(times).interpolate(method="time").bfill().ffill()
+        used_anchor = np.nan
+        used_source = "legacy_next_hour_bfill"
+        observation_cutoff = pd.NaT
+    else:
+        if left_anchor_kw is None:
+            used_anchor = float(hourly.iloc[0])
+            used_source = anchor_source or "first_hour_forecast_fallback:no_prior_observation"
+            observation_cutoff = pd.NaT
+        else:
+            used_anchor = float(left_anchor_kw)
+            if not np.isfinite(used_anchor) or used_anchor < 0:
+                raise ValueError("left_anchor_kw must be finite and nonnegative")
+            used_source = anchor_source or "observed_completed_interval"
+            observation_cutoff = issue_datetime
+        anchors = pd.concat([pd.Series([used_anchor], index=[issue_datetime]), hourly])
+        if anchors.index.duplicated().any():
+            raise ValueError("forecast anchors contain duplicate target datetimes")
+        values = anchors.reindex(pd.DatetimeIndex([issue_datetime]).append(times)).interpolate(
+            method="time"
+        ).ffill().iloc[1:]
+
+    result = pd.DataFrame({
+        "issue_datetime": issue_datetime,
+        "target_datetime": times,
+        "pv_forecast_kw": values.to_numpy(float),
+        "observation_cutoff": observation_cutoff,
+        "anchor_kw": used_anchor,
+        "anchor_source": used_source,
+        "boundary_method": boundary_method,
+        "interpolation_method": "linear_time",
+    })
+    # Supplied hourly values are immutable inputs, not interpolation targets.
+    at_hourly = result.set_index("target_datetime").loc[hourly.index, "pv_forecast_kw"].to_numpy()
+    if not np.allclose(at_hourly, hourly.to_numpy(), atol=1e-12, rtol=0):
+        raise AssertionError("hourly Attachment 3 forecast values changed during interpolation")
+    return result
 
 def get_day_actual(processed_path: Path, date) -> dict:
     df = pd.read_parquet(processed_path) if str(processed_path).lower().endswith('.parquet') and Path(processed_path).exists() else pd.read_csv(processed_path, parse_dates=['date']); x = df[df.date == pd.Timestamp(date).normalize()].sort_values("slot")
